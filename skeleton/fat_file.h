@@ -126,6 +126,9 @@ fat_file_pwrite(struct fat_file *file, const void *buf, size_t size,
                 off_t offset);
 
 extern int
+fat_file_truncate(struct fat_file *file, off_t offset);
+
+extern int
 fat_write_new_child(struct fat_file *parent, struct fat_volume *vol,
                     const char *path, bool isdir);
 
@@ -139,7 +142,7 @@ extern void
 fat_destroy_file_tree(struct fat_file *root);
 
 extern int
-fat_file_alloc_cluster_cache(struct fat_file *file);
+fat_file_load_cluster_cache(struct fat_file *file);
 
 extern void
 fat_file_free_cluster_cache(struct fat_file *file);

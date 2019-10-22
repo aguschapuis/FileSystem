@@ -59,7 +59,7 @@ fat_fuse_open(const char *path, struct fuse_file_info *fi)
     if (fat_file_is_directory(file))
         return -EISDIR;
     if (file->num_times_opened == 0)
-        if (fat_file_alloc_cluster_cache(file))
+        if (fat_file_load_cluster_cache(file))
             return -errno;
     fat_file_inc_num_times_opened(file);
     fi->fh = (uintptr_t)file;
@@ -164,7 +164,7 @@ fat_fuse_utime(const char *path, struct utimbuf *buf) {
     if (!file)
         return -ENOENT;
     if (fat_file_is_root(file)) {
-        DEBUG("Setting time for parent ignored");
+        DEBUG("WARNING: Setting time for parent ignored");
         return 0; // We do nothing, no utime for parent
     }
     return fat_utime(file, buf);

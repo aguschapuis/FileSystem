@@ -7,6 +7,7 @@
 #include <sys/types.h>
 
 #define FAT_CLUSTER_END_OF_CHAIN 0xFFFFFFFF
+#define FAT_CLUSTER_FREE 0x00000000
 #define FAT_MOUNT_FLAG_READONLY     0x1
 #define FAT_MOUNT_FLAG_READWRITE    0x2
 

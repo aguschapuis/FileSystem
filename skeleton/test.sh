@@ -109,6 +109,56 @@ else
   clean_and_exit -1
 fi
 
+TESTNAME="Write existing file that had one cluster"
+DATA="Write existing file"
+echo "lala" > $MOUNTING_POINT/newfile4
+echo $DATA > $MOUNTING_POINT/newfile4
+counts=$(grep "$DATA" $MOUNTING_POINT/newfile4 | wc -l)
+if [ "$counts" == "1" ]
+then
+  echo "---------------- PASSED: $TESTNAME OK"
+else
+  echo "---------------- ERROR: $TESTNAME not working"
+  clean_and_exit -1
+fi
+
+TESTNAME="Write existing file that had multiple clusters"
+yes | head -n 1024 > $MOUNTING_POINT/newfile5
+DATA="Write existing file"
+echo $DATA > $MOUNTING_POINT/newfile5
+counts=$(grep "$DATA" $MOUNTING_POINT/newfile5 | wc -l)
+if [ "$counts" == "1" ]
+then
+  echo "---------------- PASSED: $TESTNAME OK"
+else
+  echo "---------------- ERROR: $TESTNAME not working"
+  clean_and_exit -1
+fi
+
+TESTNAME="Truncate file that had multiple clusters"
+yes | head -n 1024 > $MOUNTING_POINT/newfile6
+truncate -s 10 $MOUNTING_POINT/newfile6
+counts=$(grep "y" $MOUNTING_POINT/newfile6 | wc -l)
+if [ "$counts" == "5" ]
+then
+  echo "---------------- PASSED: $TESTNAME OK"
+else
+  echo "---------------- ERROR: $TESTNAME not working"
+  clean_and_exit -1
+fi
+
+TESTNAME="Truncate file and set time correctly"
+truncate -s 10 $MOUNTING_POINT/MANIF.TXT
+DATE=$(ls -l $MOUNTING_POINT/MANIF.TXT | awk '{print $6 " " $7}')
+EXPECTED_DATE=$(ls -l $MOUNTING_POINT/newfile6 | awk '{print $6 " " $7}')
+if [ "$DATE" == "$EXPECTED_DATE" ]
+then
+  echo "---------------- PASSED: $TESTNAME OK"
+else
+  echo "---------------- ERROR: $TESTNAME not working"
+  clean_and_exit -1
+fi
+
 
 echo "-------- TEST: All test passed"
 

@@ -527,7 +527,7 @@ get_bytes_from_cluster(size_t bytes_remaining, off_t offset,
 
 /* Calculates the number of clusters a file has according to its size */
 u32
-get_cluster_for_file(size_t file_size, struct fat_volume *vol) 
+get_cluster_for_file(size_t file_size, struct fat_volume *vol)
 {
     size_t bytes_per_cluster = get_bytes_per_cluster(vol);
 
@@ -537,7 +537,8 @@ get_cluster_for_file(size_t file_size, struct fat_volume *vol)
 static u32
 fat16_next_free_cluster(struct fat_volume *vol) {
     u32 next_free_cluster = 2;  /* First two clusters are reserved */
-    while (le16_to_cpu(((const le16*)vol->fat_map)[next_free_cluster]) != 0)
+    while (le16_to_cpu(((const le16*)vol->fat_map)[next_free_cluster]) !=
+           FAT_CLUSTER_FREE)
         next_free_cluster++;
     if (!fat_is_valid_cluster_number(vol, next_free_cluster)) {
         fat_error("There was a problem fetching for a free cluster");
@@ -550,7 +551,8 @@ fat16_next_free_cluster(struct fat_volume *vol) {
 static u32
 fat32_next_free_cluster(struct fat_volume *vol) {
     u32 next_free_cluster = 2;  /* First two clusters are reserved */
-    while (le32_to_cpu(((const le32*)vol->fat_map)[next_free_cluster]) != 0)
+    while (le32_to_cpu(((const le32*)vol->fat_map)[next_free_cluster]) !=
+           FAT_CLUSTER_FREE)
         next_free_cluster++;
     if (!fat_is_valid_cluster_number(vol, next_free_cluster)) {
         fat_error("There was a problem fetching for a free cluster");
@@ -560,6 +562,8 @@ fat32_next_free_cluster(struct fat_volume *vol) {
     return next_free_cluster;
 }
 
+/* Returns the position in the FAT table of the first unused cluster.
+ */
 u32
 fat_next_free_cluster(struct fat_volume *vol) {
     u32 result = 0;

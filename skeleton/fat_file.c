@@ -218,7 +218,7 @@ fat_vol_free_old_files(struct fat_volume *vol)
         struct fat_file *file;
 
         file = list_entry(vol->lru_file_list.prev, struct fat_file,
-                  lru_list);
+                          lru_list);
         fat_destroy_file_tree(file);
     }
 }
@@ -271,7 +271,7 @@ fat_dir_read_children(struct fat_file *dir)
 
         end_ptr = (struct fat_dir_entry*)(buf + chunk_size) - 1;
         if (full_pread(vol->fd, buf, chunk_size,
-                   cur_offset) != chunk_size) {
+                       cur_offset) != chunk_size) {
             fat_destroy_file_tree(dir);
             return -1;
         }
@@ -291,7 +291,8 @@ fat_dir_read_children(struct fat_file *dir)
                 return -1;
             }
             child->dentry = calloc(1, sizeof(*child->dentry));
-            /* copy the entry (safer, because buffer was allocated with alloca) */
+            // copy the entry (safer, because buffer was allocated with
+            // alloca)
             memcpy(child->dentry, disk_dentry_ptr,
                    sizeof(struct fat_dir_entry));
 
@@ -332,17 +333,18 @@ fat_dir_read_children(struct fat_file *dir)
 
 
 /* Look up a child of a FAT directory, reading the children into memory if
- * needed.  Return NULL and set errno to ENOTDIR if the FAT file is not
- * actually a directory.  Otherwise returns NULL and sets ENOENT if the file is
- * not found, or a pointer to the located file otherwise. */
+ * needed.  Return NULL and set errno to ENOTDIR if the FAT file is not actually
+ * a directory.  Otherwise returns NULL and sets ENOENT if the file is not
+ * found, or a pointer to the located file otherwise. */
 static struct fat_file *
 fat_dir_lookup(struct fat_file *dir, const char *name)
 {
     struct avl_tree_node *node;
 
-    if (!dir->children_read)
+    if (!dir->children_read) {
         if (fat_dir_read_children(dir))
             return NULL;
+    }
 
     node = avl_tree_lookup(dir->dir.children, name, _avl_cmp_name_to_fat_file);
     if (!node) {
@@ -456,30 +458,47 @@ fat_destroy_file_tree(struct fat_file *root)
     }
 }
 
-/* Allocate the table of clusters for a FAT file. */
+/* Allocate the table of clusters for a FAT file and fill it with
+ * file clusters clusters from FAT table. */
 int
-fat_file_alloc_cluster_cache(struct fat_file *file)
+fat_file_load_cluster_cache(struct fat_file *file)
 {
-    u32 num_clusters;
-    u32 i;
+    u32 num_clusters, next_cluster;
+    u32 *cluster_cache;
 
     num_clusters = get_cluster_for_file(file->dentry->file_size, file->volume);
+    DEBUG("Loading cache of %u clusters", num_clusters);
 
     if (num_clusters == 0) /* Zero-length file */
         return 0;
 
-    file->file.cluster_cache = malloc(num_clusters *
-                      sizeof(file->file.cluster_cache[0]));
+    file->file.cluster_cache = calloc(
+        num_clusters, sizeof(file->file.cluster_cache[0]));
+    cluster_cache = file->file.cluster_cache;
     file->file.num_clusters = num_clusters;
-    if (!file->file.cluster_cache)
+    if (!cluster_cache)
         return -1;
 
-    /* We don't read the whole table right away: we just read the first
-     * entry, then read the rest on demand. */
-    file->file.cluster_cache[0] = file->start_cluster;
-    for (i = 1; i < num_clusters; i++)
-        file->file.cluster_cache[i] = FAT_CLUSTER_END_OF_CHAIN;
+    /* Read clusters from table */
+    cluster_cache[0] = file->start_cluster;
     file->file.last_known_cluster_idx = 0;
+
+    next_cluster = fat_next_cluster(
+        file->volume, cluster_cache[file->file.last_known_cluster_idx]);
+    while (next_cluster != FAT_CLUSTER_END_OF_CHAIN) {
+        file->file.last_known_cluster_idx++;
+        if (file->file.last_known_cluster_idx > num_clusters - 1) {
+            DEBUG("ERROR: FAT table corrupt, too many clusters for file size.");
+            return -EIO;
+        }
+        cluster_cache[file->file.last_known_cluster_idx] = next_cluster;
+        next_cluster = fat_next_cluster(
+            file->volume, cluster_cache[file->file.last_known_cluster_idx]);
+    }
+    if (file->file.last_known_cluster_idx != num_clusters - 1) {
+        DEBUG("ERROR: FAT table corrupt, not enough clusters for file size.");
+        return -EIO;
+    }
     return 0;
 }
 
@@ -595,25 +614,6 @@ fat_file_init(struct fat_file *file, struct fat_volume *vol)
     INIT_LIST_HEAD(&file->lru_list);
 }
 
-/* Read the cluster numbers we are going to need for the read operation from the
- * FAT. */
-static int
-fat_file_preload_clusters(struct fat_file *file, u32 end_cluster_idx)
-{
-    u32 *cluster_cache;
-    u32 next_cluster;
-
-    cluster_cache = file->file.cluster_cache;
-    while (file->file.last_known_cluster_idx < end_cluster_idx) {
-        next_cluster = fat_next_cluster(file->volume,
-                        cluster_cache[file->file.last_known_cluster_idx]);
-        if (next_cluster == FAT_CLUSTER_END_OF_CHAIN)
-            return -EIO;
-        cluster_cache[++file->file.last_known_cluster_idx] = next_cluster;
-    }
-    return 0;
-}
-
 static size_t
 do_fat_file_pread(struct fat_file *file, void *buf, size_t size, off_t offset,
           u32 start_cluster_idx, u32 end_cluster_idx)
@@ -637,7 +637,8 @@ do_fat_file_pread(struct fat_file *file, void *buf, size_t size, off_t offset,
             bytes_remaining, offset, vol);
         data_offset = fat_data_cluster_offset(vol, next_cluster) +
             mask_offset(offset, vol);
-        bytes_read = full_pread(vol->fd, buf, cluster_needed_bytes, data_offset);
+        bytes_read = full_pread(
+            vol->fd, buf, cluster_needed_bytes, data_offset);
         if (bytes_read != cluster_needed_bytes)
             break;
         bytes_remaining -= bytes_read;
@@ -657,7 +658,6 @@ fat_file_pread(struct fat_file *file, void *buf, size_t size, off_t offset)
     u32 end_cluster_idx;
     off_t last_byte;
     u16 cluster_order;
-    int ret;
 
     if (size == 0)
         return 0;
@@ -672,11 +672,8 @@ fat_file_pread(struct fat_file *file, void *buf, size_t size, off_t offset)
         return 0;
     last_byte = offset + size - 1;
     end_cluster_idx = last_byte >> cluster_order;
-    ret = fat_file_preload_clusters(file, end_cluster_idx);
-    if (ret)
-        return ret;
     return do_fat_file_pread(file, buf, size, offset,
-                 start_cluster_idx, end_cluster_idx);
+                             start_cluster_idx, end_cluster_idx);
 }
 
 /* Build the time entries for an in-disk file structure.
@@ -804,48 +801,6 @@ fat_add_child_memory(struct fat_dir_entry *child_disk_entry,
 }
 
 static int
-fat32_mark_cluster_used(u32 cluster, struct fat_volume *vol) {
-    le32 used_valued = cpu_to_le32(FAT_CLUSTER_END_OF_CHAIN);
-    /* Write the disk fat table */
-    off_t entry_offset = (off_t)(cluster * 4) + vol->fat_offset;
-    ssize_t written_bytes = pwrite(vol->fd, &used_valued, sizeof(le32),
-                                   entry_offset);
-    if (written_bytes <= 0) {
-        DEBUG("Error writing child disk entry");
-        return -1;
-    }
-    /* Alter the in-memory table */
-    ((le32*)vol->fat_map)[cluster] = used_valued;
-    return 0;
-}
-
-static int
-fat16_mark_cluster_used(u32 cluster, struct fat_volume *vol) {
-    le16 used_valued = cpu_to_le16(0xFFFF);
-    /* Write the disk fat table */
-    off_t entry_offset = (off_t)(cluster * 2) + vol->fat_offset;
-    ssize_t written_bytes = pwrite(vol->fd, &used_valued, sizeof(le16),
-                                   entry_offset);
-    if (written_bytes <= 0) {
-        DEBUG("Error writing child disk entry");
-        return -1;
-    }
-    /* Alter the in-memory table */
-    ((le16*)vol->fat_map)[cluster] = used_valued;
-    return 0;
-}
-
-static int
-fat_mark_cluster_used(u32 cluster, struct fat_volume *vol) {
-    if (vol->type == FAT_TYPE_FAT16) {
-        return fat16_mark_cluster_used(cluster, vol);
-    } else if(vol->type == FAT_TYPE_FAT32) {
-        return fat32_mark_cluster_used(cluster, vol);
-    }
-    return -1;
-}
-
-static int
 fat32_set_next_cluster(u32 cur_cluster, u32 next_cluster,
         struct fat_volume *vol) {
     le32 next_cluster_le32 = cpu_to_le32(next_cluster);
@@ -903,6 +858,7 @@ fat_write_dir_entry(struct fat_file *parent, struct fat_volume *vol,
                           &chunk_size);
     DEBUG("Writting entry on directory %s, entry %u", parent->name, nentry);
     if (chunk_size <= nentry*sizeof(*child_disk_entry)) {
+        /* TODO we should add a new cluster to the directory */
         DEBUG("The parent directory is full.");
         return -ENOSPC;
     }
@@ -943,9 +899,10 @@ fat_write_new_child(struct fat_file *parent, struct fat_volume *vol,
         child_disk_entry->attribs = FILE_ATTRIBUTE_ARCHIVE;
     }
     child_disk_entry->reserved = 0;
-    child_disk_entry->create_time_fine_res = 0;
+    child_disk_entry->create_time_fine_res = 0; /* No idea what this is */
     fat_fill_time(&(child_disk_entry->create_date),
                   &(child_disk_entry->create_time), creation_time);
+    /* TODO dates are weird */
     child_disk_entry->last_access_date = child_disk_entry->create_date;
     child_disk_entry->last_modified_time = child_disk_entry->create_time;
     child_disk_entry->last_modified_date = child_disk_entry->create_date;
@@ -966,7 +923,7 @@ fat_write_new_child(struct fat_file *parent, struct fat_volume *vol,
     }
     parent->dir.nentries++;
 
-    err = fat_mark_cluster_used(start_cluster, vol);
+    err = fat_set_next_cluster(start_cluster, FAT_CLUSTER_END_OF_CHAIN, vol);
     if (err != 0) {
         free(child_disk_entry);
         return err;
@@ -996,14 +953,53 @@ fat_utime(struct fat_file *file_descriptor, struct utimbuf *buf) {
         file_descriptor->dentry, file_descriptor->pos_in_parent);
 }
 
+/* Truncate file to given offset.
+ * The task performed are: update cache, update file size, rewrite FAT table,
+ * and modify time in file entry.
+ * Optional points:
+ *     If the file size is smaller than length, bytes between the old and
+ *     new lengths are read as zeros.
+ */
+int
+fat_file_truncate(struct fat_file *file, off_t offset) {
+    return 0;
+}
+
 /* Reserve the needed clusters for the file and add them to the cluster_cache.
  * For each new cluster the function adds it to the chain of clusters in the
  * fat memory (see fat_set_next_cluster) and mark the new cluster as used
  * (see fat_mark_cluster_used).
- * Hint: Check the funcion fat_file_preload_clusters as it is similar. */
+ * Hint: Check the funcion fat_file_load_cluster_cache, it is similar. */
 static int
 fat_file_reserve_clusters(struct fat_file *file, u32 end_cluster_idx)
 {
+    u32 *cluster_cache;
+    u32 cur_cluster, next_cluster;
+    int ret;
+
+    if (file->file.cluster_cache) {
+        // We already have something in the cache, realloc with new size
+        free(file->file.cluster_cache);
+    }
+    file->file.cluster_cache = calloc(end_cluster_idx + 1, sizeof(u32));
+    cluster_cache = file->file.cluster_cache;
+    cluster_cache[0] = file->start_cluster;
+    while (file->file.last_known_cluster_idx < end_cluster_idx) {
+        cur_cluster = cluster_cache[file->file.last_known_cluster_idx];
+        next_cluster = fat_next_free_cluster(file->volume);
+        if (next_cluster == FAT_CLUSTER_END_OF_CHAIN)
+            return -EIO;
+        cluster_cache[++file->file.last_known_cluster_idx] = next_cluster;
+
+        ret = fat_set_next_cluster(cur_cluster, next_cluster, file->volume);
+        if (ret)
+            return ret;
+
+        ret = fat_set_next_cluster(next_cluster, FAT_CLUSTER_END_OF_CHAIN,
+                                   file->volume);
+        if (ret)
+            return ret;
+    }
     return 0;
 }
 
@@ -1017,7 +1013,8 @@ fat_file_reserve_clusters(struct fat_file *file, u32 end_cluster_idx)
  * zero) or -1 if some error happened. */
 static size_t
 do_fat_file_pwrite(struct fat_file *file, const void *buf, size_t size,
-                   off_t offset, u32 start_cluster_idx, u32 end_cluster_idx) {
+        off_t offset, u32 start_cluster_idx, u32 end_cluster_idx)
+{
     return 0;
 }
 
@@ -1028,7 +1025,8 @@ do_fat_file_pwrite(struct fat_file *file, const void *buf, size_t size,
  * needs a reallocation (or a better data structure for the cluster cache) */
 ssize_t
 fat_file_pwrite(struct fat_file *file, const void *buf, size_t size,
-                off_t offset) {
+                off_t offset)
+{
     u32 start_cluster_idx;
     u32 end_cluster_idx;
     off_t last_byte;
@@ -1043,19 +1041,17 @@ fat_file_pwrite(struct fat_file *file, const void *buf, size_t size,
 
     file->dentry->file_size = size;
     cluster_order = file->volume->cluster_order;
+    // Index of the first cluster where we want to write
     start_cluster_idx = offset >> cluster_order;
     last_byte = offset + size - 1;
+    // Index of the last cluster used by the file
     end_cluster_idx = last_byte >> cluster_order;
-
-    /* Allocate the needed cluster in the cache */
-    ret = fat_file_alloc_cluster_cache(file);
-    if (ret)
-        return ret;
 
     ret = fat_file_reserve_clusters(file, end_cluster_idx);
     if (ret)
         return ret;
 
-    return do_fat_file_pwrite(file, buf, size, offset,
-                 start_cluster_idx, end_cluster_idx);
+    ret = do_fat_file_pwrite(file, buf, size, offset,
+                             start_cluster_idx, end_cluster_idx);
+    return ret;
 }
