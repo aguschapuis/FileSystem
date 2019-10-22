@@ -166,7 +166,7 @@ implementadas en nuestro sistema base.
 
 ### Skeleton
 
-Para comenzar el laboratorio, deben comenzar por la implementación base que está en [este repositorio](https://bitbucket.org/sistop-famaf/fuse-skeleton/src/master/). Una vez descargado, deberían poder compilarlo sin problema.
+Para comenzar el laboratorio, deben partir de la implementación base que está en [este repositorio](https://bitbucket.org/sistop-famaf/fuse-skeleton/src/master/). Una vez descargado, deberían poder compilarlo sin problema.
 
 #### Fat-Fuse
 
