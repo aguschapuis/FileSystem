@@ -2,9 +2,11 @@
 
 ## Sistemas operativos
 
- - Revisión 2019, Cristian Cardellino, Milagro Teruel
+ - Revisión 2019, Milagro Teruel
  - Revisión 2018, Cristian Cardellino, Milagro Teruel
+ 
 Tomamos mucho de:
+
  - Revisión 2012, Nicolás Wolovick
  - Original 2009-2010, Rafael Carrascosa, Nicolás Wolovick
 
@@ -273,6 +275,7 @@ mostrará los mensajes provenientes de Fuse.
 
 En este laboratorio, vamos a modificar un sistema de archivos FAT en espacio de
 usuario para agregar:
+
 * Una lista de palabras que son censuradas por el sistema de archivos.
 * Funciones de creación y escritura de nuevos archivos y directorios.
 * Otras funciones para la escrita de archivos existentes.
