@@ -14,7 +14,13 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "censorship.h"
 
+#define DOT    '.'
+#define COMMA  ','
+#define SPACE  ' '
+
+;    
 /* Retrieve the currently mounted FAT volume from the FUSE context. */
 static inline struct fat_volume *
 get_fat_volume()
@@ -89,9 +95,55 @@ static int
 fat_fuse_read(const char *path, char *buf, size_t size, off_t offset,
           struct fuse_file_info *fi)
 {
+    static int read;
+
+    char word[48];
+
+    unsigned int wordend;
+
+    int aux;
+
+    offset = 0;
+
     struct fat_file *file = (struct fat_file*)(uintptr_t)fi->fh;
 
-    return fat_file_pread(file, buf, size, offset);
+    read =  fat_file_pread(file, buf, size, offset);
+
+    if (read <= 0){
+        
+        printf("El archivo esta vacio\n"); 
+    
+    } else {
+
+        for (unsigned int i = 0; i  < strlen(buf); i++){
+
+            if ((buf[i] == DOT) || (buf[i] == SPACE) || (buf[i] == COMMA)){
+
+                memcpy(&buf[wordend], &word, (i - wordend));
+                
+                for (unsigned int j = 0; j < 114; j++){
+
+                    aux = memcmp(&word, prohibidas[i], sizeof(word));
+                    
+                    if (aux == 0){
+
+                        memset(&buf[wordend],'x', sizeof(word));
+
+                    } else {
+                        
+                        continue;
+                    
+                    }  
+                }
+
+             wordend = i + 1;
+
+            }
+            
+        }
+
+    }
+    return read;
 }
 
 /* Read the entries of a directory */

@@ -34,7 +34,7 @@ struct fat_volume {
 
     /* FAT12, FAT16, or FAT32 */
     enum fat_type type;
-
+    
     /* Root directory */
     struct fat_file root;
 
