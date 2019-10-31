@@ -1015,7 +1015,38 @@ static size_t
 do_fat_file_pwrite(struct fat_file *file, const void *buf, size_t size,
         off_t offset, u32 start_cluster_idx, u32 end_cluster_idx)
 {   
-    return 0;
+
+    size_t bytes_remaining;
+    struct fat_volume *vol;
+    u32 i;
+
+    DEBUG("start_cluster_idx=%u, end_cluster_idx=%u",
+          start_cluster_idx, end_cluster_idx);
+    bytes_remaining = size;
+    vol = file->volume;
+    for (i = start_cluster_idx; i <= end_cluster_idx; i++) {
+        size_t cluster_needed_bytes;
+        off_t data_offset;
+        ssize_t bytes_write;
+        u32 next_cluster;
+
+        next_cluster = file->file.cluster_cache[i];
+        cluster_needed_bytes = get_bytes_from_cluster(
+            bytes_remaining, offset, vol);
+        data_offset = fat_data_cluster_offset(vol, next_cluster) +
+            mask_offset(offset, vol);
+        bytes_write = full_pwrite(
+            vol->fd, buf, cluster_needed_bytes, data_offset);
+        if (bytes_write != cluster_needed_bytes)
+            break;
+        bytes_remaining -= bytes_write;  //bytes que quedan por ser leidos
+        buf -= bytes_write;  //resta los bytes leidos
+        offset -= bytes_write; //igual
+    }
+    // fat_write_dir_entry(parent,vol,)  ------> Me quedaria agregar esta funcion para que agrege el archivo al directorio padre
+
+    return size - bytes_remaining; //Deberia devolver size (por que tendriamos que aver escrito todos los bytes)
+
 }
 
 /* Write @size bytes from the FAT file @file at offset @offset, reading from
