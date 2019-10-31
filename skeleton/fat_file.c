@@ -1009,12 +1009,12 @@ fat_file_reserve_clusters(struct fat_file *file, u32 end_cluster_idx)
  * is inside the cluster_cache of the file. At most should write as many bytes
  * as the cluster has available. After writing each of the clusters, it needs
  * to mark the new file data into the directory (see fat_write_dir_entry).
- * Returns the written bytes (if all the bytes were written, it should be
- * zero) or -1 if some error happened. */
+ * Returns the written bytes */
+
 static size_t
 do_fat_file_pwrite(struct fat_file *file, const void *buf, size_t size,
         off_t offset, u32 start_cluster_idx, u32 end_cluster_idx)
-{
+{   
     return 0;
 }
 

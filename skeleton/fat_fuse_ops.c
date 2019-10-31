@@ -15,6 +15,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include "censorship.h"
+#include <sys/types.h>
+#include <sys/stat.h>
 
 #define DOT    '.'
 #define COMMA  ','
@@ -207,6 +209,26 @@ fat_fuse_mkdir(const char *path, mode_t mode)
 }
 
 static int
+fat_fuse_mknod(const char *path, mode_t mode)
+{
+    struct fat_volume *vol;
+    struct fat_file *parent;
+
+    vol = get_fat_volume();
+    parent = fat_pathname_to_file(vol, dirname(strdup(path)));  //me devuelve el padre 
+    if (!parent)
+        return -ENOENT;
+    if (!fat_file_is_directory(parent)) {
+        fat_error("Error! Parent is not directory\n");
+        return -ENOTDIR;
+    }
+
+    return fat_write_new_child(parent, vol, path, false); //el ultimo parametro de la funcion tiene que ser falso para que sea un archivo
+}
+
+
+
+static int
 fat_fuse_utime(const char *path, struct utimbuf *buf) {
     struct fat_volume *vol;
     struct fat_file *file;
@@ -231,6 +253,7 @@ struct fuse_operations fat_fuse_operations = {
     .open       = fat_fuse_open,
     .opendir    = fat_fuse_opendir,
     .mkdir      = fat_fuse_mkdir,
+    .mknod      = fat_fuse_mknod,
     .read       = fat_fuse_read,
     .readdir    = fat_fuse_readdir,
     .release    = fat_fuse_release,
