@@ -21,6 +21,9 @@
 #define DOT    '.'
 #define COMMA  ','
 #define SPACE  ' '
+#define JUMP   '\n'
+#define RR     '\r'  
+
 
 ;    
 /* Retrieve the currently mounted FAT volume from the FUSE context. */
@@ -98,52 +101,28 @@ fat_fuse_read(const char *path, char *buf, size_t size, off_t offset,
           struct fuse_file_info *fi)
 {
     static int read;
-
     char word[48];
-
-    unsigned int wordend;
-
+    unsigned int wordstart;
     int aux;
-
     offset = 0;
-
     struct fat_file *file = (struct fat_file*)(uintptr_t)fi->fh;
 
     read =  fat_file_pread(file, buf, size, offset);
-
-    if (read <= 0){
-        
-        printf("El archivo esta vacio\n"); 
-    
+    if (read <= 0){        
+        printf("El archivo esta vacio\n");     
     } else {
-
         for (unsigned int i = 0; i  < strlen(buf); i++){
-
-            if ((buf[i] == DOT) || (buf[i] == SPACE) || (buf[i] == COMMA)){
-
-                memcpy(&buf[wordend], &word, (i - wordend));
-                
+            if ((buf[i] == DOT) || (buf[i] == SPACE) || (buf[i] == COMMA) || (buf[i] == JUMP || (buf[i] == RR))){
+                memcpy(&buf[wordstart], &word, (i - wordstart));                
                 for (unsigned int j = 0; j < 114; j++){
-
-                    aux = memcmp(&word, prohibidas[i], sizeof(word));
-                    
+                    aux = memcmp(&word, prohibidas[j], sizeof(word));
                     if (aux == 0){
-
-                        memset(&buf[wordend],'x', sizeof(word));
-
-                    } else {
-                        
-                        continue;
-                    
-                    }  
+                        memset(&buf[wordstart],'x', sizeof(word));
+                    } 
                 }
-
-             wordend = i + 1;
-
+             wordstart = i + 1;
             }
-            
         }
-
     }
     return read;
 }

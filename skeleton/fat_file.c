@@ -1043,7 +1043,7 @@ do_fat_file_pwrite(struct fat_file *file, const void *buf, size_t size,
         buf -= bytes_write;  //resta los bytes leidos
         offset -= bytes_write; //igual
     }
-    // fat_write_dir_entry(parent,vol,)  ------> Me quedaria agregar esta funcion para que agrege el archivo al directorio padre
+    fat_write_dir_entry(file->parent,file->volume,file->dentry, file->pos_in_parent);  //------> Me quedaria agregar esta funcion para que agrege el archivo al directorio padre
 
     return size - bytes_remaining; //Deberia devolver size (por que tendriamos que aver escrito todos los bytes)
 
