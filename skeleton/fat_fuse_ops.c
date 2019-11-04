@@ -104,7 +104,7 @@ fat_fuse_read(const char *path, char *buf, size_t size, off_t offset,
     char word[48];
     unsigned int wordstart;
     int aux;
-    offset = 0;
+    wordstart = 0;
     struct fat_file *file = (struct fat_file*)(uintptr_t)fi->fh;
 
     read =  fat_file_pread(file, buf, size, offset);
@@ -126,6 +126,16 @@ fat_fuse_read(const char *path, char *buf, size_t size, off_t offset,
     }
     return read;
 }
+
+static int
+fat_fuse_write (const char *path, const char *buf, size_t size, off_t offset,
+          struct fuse_file_info *fi)
+{
+    struct fat_file *file = (struct fat_file*)(uintptr_t)fi->fh;
+
+    return fat_file_pwrite(file, buf, size, offset);
+
+}        
 
 /* Read the entries of a directory */
 static int
@@ -188,7 +198,7 @@ fat_fuse_mkdir(const char *path, mode_t mode)
 }
 
 static int
-fat_fuse_mknod(const char *path, mode_t mode)
+fat_fuse_mknod(const char *path, mode_t mode, dev_t dev)
 {
     struct fat_volume *vol;
     struct fat_file *parent;
@@ -223,6 +233,9 @@ fat_fuse_utime(const char *path, struct utimbuf *buf) {
     return fat_utime(file, buf);
 }
 
+
+
+
 /* Filesystem operations for FUSE.  Only some of the possible operations are
  * implemented (the rest stay as NULL pointers and are interpreted as not
  * implemented by FUSE). */
@@ -234,6 +247,7 @@ struct fuse_operations fat_fuse_operations = {
     .mkdir      = fat_fuse_mkdir,
     .mknod      = fat_fuse_mknod,
     .read       = fat_fuse_read,
+    .write      = fat_fuse_write,
     .readdir    = fat_fuse_readdir,
     .release    = fat_fuse_release,
     .releasedir = fat_fuse_releasedir,
