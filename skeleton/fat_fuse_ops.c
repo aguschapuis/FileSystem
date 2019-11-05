@@ -101,9 +101,9 @@ fat_fuse_read(const char *path, char *buf, size_t size, off_t offset,
           struct fuse_file_info *fi)
 {
     static int read;
-    char word[48];
+    //char word[48];
     unsigned int wordstart;
-    int aux;
+    //int aux;
     wordstart = 0;
     struct fat_file *file = (struct fat_file*)(uintptr_t)fi->fh;
 
@@ -111,16 +111,15 @@ fat_fuse_read(const char *path, char *buf, size_t size, off_t offset,
     if (read <= 0){        
         printf("El archivo esta vacio\n");     
     } else {
-        for (unsigned int i = 0; i  < strlen(buf); i++){
+        for (unsigned int i = 0; i  < read; i++){
             if ((buf[i] == DOT) || (buf[i] == SPACE) || (buf[i] == COMMA) || (buf[i] == JUMP || (buf[i] == RR))){
-                memcpy(&buf[wordstart], &word, (i - wordstart));                
+                //memcpy(&buf[wordstart], &word, (i - wordstart));                
                 for (unsigned int j = 0; j < 114; j++){
-                    aux = memcmp(&word, prohibidas[j], sizeof(word));
-                    if (aux == 0){
-                        memset(&buf[wordstart],'x', sizeof(word));
+                    if(!memcmp(&buf[wordstart], prohibidas[j], i - wordstart)){
+                        memset(&buf[wordstart],'x', (i - wordstart));
                     } 
                 }
-             wordstart = i + 1;
+                wordstart = i + 1;
             }
         }
     }
