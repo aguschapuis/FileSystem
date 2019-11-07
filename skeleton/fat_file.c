@@ -971,7 +971,7 @@ fat_file_truncate(const char *path, off_t offset) {
     time_t new_time;
 
     struct fat_volume *vol = fuse_get_context()->private_data;
-    file = fat_pathname_to_file(vol,path);
+    file = fat_pathname_to_file(vol,strdup(path));
     
     if (offset > file->dentry->file_size){
         printf("El archivo nuevo es mas grande que el viejo\n");
