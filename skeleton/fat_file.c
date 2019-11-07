@@ -15,6 +15,7 @@
 #include "fat_file.h"
 #include "fat_util.h"
 #include "fat_volume.h"
+#include "fat_fuse_ops.c"
 
 /* Flag indicating that the character is legal to use in a filename */
 #define FAT_CHAR_LEGAL_IN_FILENAME 0x1
@@ -962,7 +963,39 @@ fat_utime(struct fat_file *file_descriptor, struct utimbuf *buf) {
  */
 int
 fat_file_truncate(struct fat_file *file, off_t offset) {
-    return 0;
+    
+    //struct fat_file *file;
+    //struct fat_volume *vol;
+    u32 clus_length;
+    time_t new_time;
+    u32 end_cluster;
+    int ret;
+
+
+    //vol = get_fat_volume();
+    //file = fat_pathname_to_file(vol, (strdup(path)));
+    if (offset > file->dentry->file_size){
+        printf("El archivo nuevo es mas grande que el viejo\n");
+        return -1;
+    }
+    //Update the file size
+    file->dentry->file_size = offset;
+
+    // Update the cache
+    fat_file_free_cluster_cache(file);  // Free the old cluster cache
+    clus_length = get_cluster_for_file(offset ,file->volume);// Number of clusters needed
+    file->file.num_clusters = clus_length; 
+    fat_file_load_cluster_cache(file); // Allocates the new one
+
+    //Update time un file entry
+     new_time = time(NULL);
+     file->dentry->last_modified_time = (le16)new_time;
+  
+    // Rewrite the FAT table
+    //end_cluster = file->file.cluster_cache[clus_length - 1];
+    //ret = do_fat_file_pwrite(file,  , file->dentry->file_size, file->start_cluster, file->start_cluster, end_cluster);
+    
+    return ret;
 }
 
 /* Reserve the needed clusters for the file and add them to the cluster_cache.
@@ -1040,8 +1073,8 @@ do_fat_file_pwrite(struct fat_file *file, const void *buf, size_t size,
         if (bytes_write != cluster_needed_bytes)
             break;
         bytes_remaining -= bytes_write;  //bytes que quedan por ser leidos
-        buf += bytes_write;  //resta los bytes leidos
-        offset += bytes_write; //igual
+        buf += bytes_write;  
+        offset += bytes_write;
     }
     fat_write_dir_entry(file->parent,file->volume, file->dentry, file->pos_in_parent);  //------> Me quedaria agregar esta funcion para que agrege el archivo al directorio padre
 
@@ -1069,7 +1102,8 @@ fat_file_pwrite(struct fat_file *file, const void *buf, size_t size,
 
     if (offset > file->dentry->file_size)
         return -EOVERFLOW;
-
+    
+    
     file->dentry->file_size = size;
     cluster_order = file->volume->cluster_order;
     // Index of the first cluster where we want to write

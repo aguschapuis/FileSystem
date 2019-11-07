@@ -89,7 +89,7 @@ struct fat_file {
              * indices in the filesystem. */
             u32 *cluster_cache;
         } file;
-    };
+    };  
     /* List node used to (sometimes) insert this file into a
      * least-recently-used list of directories for the FAT volume. */
     struct list_head lru_list;
@@ -126,7 +126,7 @@ fat_file_pwrite(struct fat_file *file, const void *buf, size_t size,
                 off_t offset);
 
 extern int
-fat_file_truncate(struct fat_file *file, off_t offset);
+fat_file_truncate(const char *path, off_t offset);
 
 extern int
 fat_write_new_child(struct fat_file *parent, struct fat_volume *vol,
