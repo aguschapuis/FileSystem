@@ -251,6 +251,7 @@ struct fuse_operations fat_fuse_operations = {
     .release    = fat_fuse_release,
     .releasedir = fat_fuse_releasedir,
     .utime      = fat_fuse_utime,
+    .truncate   = fat_file_truncate,
 
     /* We use `struct fat_file's as file handles, so we do not need to
      * require that the file path be passed to operations such as read() */
