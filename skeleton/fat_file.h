@@ -89,7 +89,7 @@ struct fat_file {
              * indices in the filesystem. */
             u32 *cluster_cache;
         } file;
-    };
+    };  
     /* List node used to (sometimes) insert this file into a
      * least-recently-used list of directories for the FAT volume. */
     struct list_head lru_list;

@@ -11,6 +11,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #include <time.h>
+#include <fuse.h>
 
 #include "fat_file.h"
 #include "fat_util.h"
@@ -1068,8 +1069,8 @@ do_fat_file_pwrite(struct fat_file *file, const void *buf, size_t size,
         if (bytes_write != cluster_needed_bytes)
             break;
         bytes_remaining -= bytes_write;  //bytes que quedan por ser leidos
-        buf += bytes_write;  //resta los bytes leidos
-        offset += bytes_write; //igual
+        buf += bytes_write;  
+        offset += bytes_write;
     }
     fat_write_dir_entry(file->parent,file->volume, file->dentry, file->pos_in_parent);  //------> Me quedaria agregar esta funcion para que agrege el archivo al directorio padre
 
@@ -1097,7 +1098,8 @@ fat_file_pwrite(struct fat_file *file, const void *buf, size_t size,
 
     if (offset > file->dentry->file_size)
         return -EOVERFLOW;
-
+    
+    
     file->dentry->file_size = size;
     cluster_order = file->volume->cluster_order;
     // Index of the first cluster where we want to write
