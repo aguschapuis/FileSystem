@@ -11,11 +11,11 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #include <time.h>
+#include <fuse.h>
 
 #include "fat_file.h"
 #include "fat_util.h"
 #include "fat_volume.h"
-#include "fat_fuse_ops.c"
 
 /* Flag indicating that the character is legal to use in a filename */
 #define FAT_CHAR_LEGAL_IN_FILENAME 0x1
@@ -962,18 +962,15 @@ fat_utime(struct fat_file *file_descriptor, struct utimbuf *buf) {
  *     new lengths are read as zeros.
  */
 int
-fat_file_truncate(struct fat_file *file, off_t offset) {
-    
-    //struct fat_file *file;
-    //struct fat_volume *vol;
+fat_file_truncate(const char *path, off_t offset) {
+        
+    struct fat_file *file;
     u32 clus_length;
     time_t new_time;
-    u32 end_cluster;
-    int ret;
 
-
-    //vol = get_fat_volume();
-    //file = fat_pathname_to_file(vol, (strdup(path)));
+    struct fat_volume *vol = fuse_get_context()->private_data;
+    file = fat_pathname_to_file(vol,path);
+    
     if (offset > file->dentry->file_size){
         printf("El archivo nuevo es mas grande que el viejo\n");
         return -1;
@@ -991,11 +988,7 @@ fat_file_truncate(struct fat_file *file, off_t offset) {
      new_time = time(NULL);
      file->dentry->last_modified_time = (le16)new_time;
   
-    // Rewrite the FAT table
-    //end_cluster = file->file.cluster_cache[clus_length - 1];
-    //ret = do_fat_file_pwrite(file,  , file->dentry->file_size, file->start_cluster, file->start_cluster, end_cluster);
-    
-    return ret;
+    return 0;
 }
 
 /* Reserve the needed clusters for the file and add them to the cluster_cache.
