@@ -630,19 +630,19 @@ do_fat_file_pread(struct fat_file *file, void *buf, size_t size, off_t offset,
     bytes_remaining = size;
     vol = file->volume;
     for (i = start_cluster_idx; i <= end_cluster_idx; i++) {
-        size_t cluster_needed_bytes;
+        size_t new_num_clusters_bytes;
         off_t data_offset;
         ssize_t bytes_read;
         u32 next_cluster;
 
         next_cluster = file->file.cluster_cache[i];
-        cluster_needed_bytes = get_bytes_from_cluster(
+        new_num_clusters_bytes = get_bytes_from_cluster(
             bytes_remaining, offset, vol);
         data_offset = fat_data_cluster_offset(vol, next_cluster) +
             mask_offset(offset, vol);
         bytes_read = full_pread(
-            vol->fd, buf, cluster_needed_bytes, data_offset);
-        if (bytes_read != cluster_needed_bytes)
+            vol->fd, buf, new_num_clusters_bytes, data_offset);
+        if (bytes_read != new_num_clusters_bytes)
             break;
         bytes_remaining -= bytes_read;
         buf += bytes_read;
@@ -964,36 +964,74 @@ fat_utime(struct fat_file *file_descriptor, struct utimbuf *buf) {
  *     new lengths are read as zeros.
  */
 
+
 int
 fat_file_truncate(const char *path, off_t offset) {
     
     struct fat_file *file;
-    u32 clus_length;
     time_t new_time;
+    u32 *cluster_cache;
+    // u32 cur_cluster;
+    u32 new_num_clusters;
+    // u32 next_cluster;
+    // u32 cluster_used;
+    u32 last_idx;
 
     struct fat_volume *vol = fuse_get_context()->private_data;
     file = fat_pathname_to_file(vol,strdup(path));
     
     if (offset > file->dentry->file_size){
         printf("El archivo nuevo es mas grande que el viejo\n");
-        return -1;
+        return 0;
     }
+
     //Update the file size
     file->dentry->file_size = offset;
+    last_idx = file->file.last_known_cluster_idx;
+    cluster_cache = file->file.cluster_cache;
 
-    // Update the cache
-    fat_file_free_cluster_cache(file);  // Free the old cluster cache
-    clus_length = get_cluster_for_file(offset ,file->volume);// Number of clusters needed
-    file->file.num_clusters = clus_length; 
-    fat_file_load_cluster_cache(file); // Allocates the new one
+    new_num_clusters = get_cluster_for_file(offset, vol);
+    file->file.num_clusters = new_num_clusters;
+
+    while (last_idx > new_num_clusters-1) {
+        fat_set_next_cluster(cluster_cache[last_idx-1], FAT_CLUSTER_FREE, file->volume); //setea el ultimo cluster = FAT_CLUSTER_FREE
+        cluster_cache[last_idx] = 0;
+        last_idx--;
+    }
+
+    fat_set_next_cluster(cluster_cache[last_idx], FAT_CLUSTER_END_OF_CHAIN, file->volume);
+
+    file->file.last_known_cluster_idx = last_idx;
+    
+    // cluster_used = 0;
+
+    // next_cluster = cluster_cache[file->file.last_known_cluster_idx];
+    
+    // while(next_cluster!=FAT_CLUSTER_END_OF_CHAIN){
+//        if(cluster_used<new_num_clusters){
+//            cluster_used++;
+        // }
+        // else {
+            // cluster_used=new_num_clusters;
+            // file->file.last_known_cluster_idx = next_cluster;
+            // cur_cluster = next_cluster;
+            // next_cluster = fat_next_cluster(file->volume, cur_cluster);          
+            // fat_set_next_cluster(cur_cluster,FAT_CLUSTER_FREE, file->volume);
+            
+        // }
+    // }
+
+    //set the last cluster with FAT_CLUSTER_END_OF_CHAIN
+
+    //update cache 
+    fat_file_load_cluster_cache(file);
 
     //Update time un file entry
-     new_time = time(NULL);
-     file->dentry->last_modified_time = (le16)new_time;
-  
-    return 0;
-}
+    new_time = time(NULL);
+    fat_fill_time(&(file->dentry->last_modified_date), &(file->dentry->last_modified_time), new_time);
 
+    return 0 ;
+}
 /* Reserve the needed clusters for the file and add them to the cluster_cache.
  * For each new cluster the function adds it to the chain of clusters in the
  * fat memory (see fat_set_next_cluster) and mark the new cluster as used
@@ -1006,6 +1044,13 @@ fat_file_reserve_clusters(struct fat_file *file, u32 end_cluster_idx)
     u32 cur_cluster, next_cluster;
     int ret;
 
+    // Add clusters only if necessary
+   if (end_cluster_idx <= file->file.last_known_cluster_idx &&
+        file->file.cluster_cache) {
+        return 0;
+    }
+
+    // Reallocate cache with new size
     if (file->file.cluster_cache) {
         // We already have something in the cache, realloc with new size
         free(file->file.cluster_cache);
@@ -1013,6 +1058,18 @@ fat_file_reserve_clusters(struct fat_file *file, u32 end_cluster_idx)
     file->file.cluster_cache = calloc(end_cluster_idx + 1, sizeof(u32));
     cluster_cache = file->file.cluster_cache;
     cluster_cache[0] = file->start_cluster;
+    file->file.last_known_cluster_idx = 0;
+
+    //Re-fill cache with old clusters
+    next_cluster = fat_next_cluster(
+    file->volume, cluster_cache[file->file.last_known_cluster_idx]);
+    while (next_cluster != FAT_CLUSTER_END_OF_CHAIN) {
+        file->file.last_known_cluster_idx++;
+        cluster_cache[file->file.last_known_cluster_idx] = next_cluster;
+        next_cluster = fat_next_cluster(
+        file->volume, cluster_cache[file->file.last_known_cluster_idx]);
+    }
+    // Add new clusters
     while (file->file.last_known_cluster_idx < end_cluster_idx) {
         cur_cluster = cluster_cache[file->file.last_known_cluster_idx];
         next_cluster = fat_next_free_cluster(file->volume);
@@ -1054,19 +1111,19 @@ do_fat_file_pwrite(struct fat_file *file, const void *buf, size_t size,
     bytes_remaining = size;
     vol = file->volume;
     for (i = start_cluster_idx; i <= end_cluster_idx; i++) {
-        size_t cluster_needed_bytes;
+        size_t new_num_clusters_bytes;
         off_t data_offset;
         ssize_t bytes_write;
         u32 next_cluster;
 
         next_cluster = file->file.cluster_cache[i];
-        cluster_needed_bytes = get_bytes_from_cluster(
+        new_num_clusters_bytes = get_bytes_from_cluster(
             bytes_remaining, offset, vol);
         data_offset = fat_data_cluster_offset(vol, next_cluster) +
             mask_offset(offset, vol);
         bytes_write = full_pwrite(
-            vol->fd, buf, cluster_needed_bytes, data_offset);
-        if (bytes_write != cluster_needed_bytes)
+            vol->fd, buf, new_num_clusters_bytes, data_offset);
+        if (bytes_write != new_num_clusters_bytes)
             break;
         bytes_remaining -= bytes_write;  //bytes que quedan por ser leidos
         buf += bytes_write;  
@@ -1100,7 +1157,10 @@ fat_file_pwrite(struct fat_file *file, const void *buf, size_t size,
         return -EOVERFLOW;
     
     
-    file->dentry->file_size = size;
+    if (size + offset > file->dentry->file_size) {
+    file->dentry->file_size = size + offset;
+    }
+
     cluster_order = file->volume->cluster_order;
     // Index of the first cluster where we want to write
     start_cluster_idx = offset >> cluster_order;

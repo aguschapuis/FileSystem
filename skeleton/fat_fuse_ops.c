@@ -110,7 +110,8 @@ fat_fuse_read(const char *path, char *buf, size_t size, off_t offset,
         printf("El archivo esta vacio\n");     
     } else {
         for (unsigned int i = 0; i  < read; i++){
-            if ((buf[i] == DOT) || (buf[i] == SPACE) || (buf[i] == COMMA) || (buf[i] == JUMP || (buf[i] == RR))){            
+            if ((buf[i] == '.') || (buf[i] == ' ') || (buf[i] == ',') ||
+             (buf[i] == '\n' || (buf[i] == '\r') || (buf[i] == '(') || (buf[i] == ')'))){            
                 for (unsigned int j = 0; j < 114; j++){
                     if(!memcmp(&buf[wordstart], prohibidas[j], i - wordstart)){
                         memset(&buf[wordstart],'x', (i - wordstart));

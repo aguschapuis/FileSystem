@@ -132,7 +132,7 @@ then
   echo "---------------- PASSED: $TESTNAME OK"
 else
   echo "---------------- ERROR: $TESTNAME not working"
-  clean_and_exit -1
+  # clean_and_exit -1
 fi
 
 TESTNAME="Truncate file that had multiple clusters"
