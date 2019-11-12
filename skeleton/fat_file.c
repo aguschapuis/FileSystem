@@ -471,6 +471,7 @@ fat_file_load_cluster_cache(struct fat_file *file)
 
     num_clusters = get_cluster_for_file(file->dentry->file_size, file->volume);
     DEBUG("Loading cache of %u clusters", num_clusters);
+    DEBUG("RESP --- > %u clusterID", file->file.last_known_cluster_idx);
 
     if (num_clusters == 0) /* Zero-length file */
         return 0;
@@ -973,6 +974,7 @@ fat_file_truncate(const char *path, off_t offset) {
     u32 *cluster_cache;
     u32 new_num_clusters;
     u32 last_idx;
+    int ret; 
 
     struct fat_volume *vol = fuse_get_context()->private_data;
     file = fat_pathname_to_file(vol,strdup(path));
@@ -988,10 +990,14 @@ fat_file_truncate(const char *path, off_t offset) {
     cluster_cache = file->file.cluster_cache;
 
     new_num_clusters = get_cluster_for_file(offset, vol);
-    file->file.num_clusters = new_num_clusters;
+    if (new_num_clusters == 0){
+        new_num_clusters = 1;
+    }
+    // file->file.num_clusters = new_num_clusters;
 
     while (last_idx > new_num_clusters-1) {
-        fat_set_next_cluster(cluster_cache[last_idx-1], FAT_CLUSTER_FREE, file->volume); //setea el ultimo cluster = FAT_CLUSTER_FREE
+        ret = fat_set_next_cluster(cluster_cache[last_idx], FAT_CLUSTER_FREE, file->volume); //setea el ultimo cluster = FAT_CLUSTER_FREE
+        if (ret) return ret;
         cluster_cache[last_idx] = 0;
         last_idx--;
     }
@@ -999,7 +1005,7 @@ fat_file_truncate(const char *path, off_t offset) {
     fat_set_next_cluster(cluster_cache[last_idx], FAT_CLUSTER_END_OF_CHAIN, file->volume);
 
     file->file.last_known_cluster_idx = last_idx;
-
+    DEBUG("%d", file->file.last_known_cluster_idx);
     //Update time un file entry
     new_time = time(NULL);
     fat_fill_time(&(file->dentry->last_modified_date), &(file->dentry->last_modified_time), new_time);
